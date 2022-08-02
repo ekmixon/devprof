@@ -38,7 +38,7 @@ def write_object(filename, generic_object):
 		with open(filename, "wb") as write_h:
 			write_h.write(generic_object.encode('utf-8'))
 	except:
-		sys.stderr.write("Problem writing " + filename + ", skipping.")
+		sys.stderr.write(f"Problem writing {filename}, skipping.")
 		raise
 
 	return
@@ -53,13 +53,21 @@ def load_json(json_filename, default_content):
 			try:
 				json_to_return = json.loads(json_h.read())
 			except json.decoder.JSONDecodeError:
-				sys.stderr.write("Unable to load " + json_filename + " .  Please check that it contains valid json.\n")
+				sys.stderr.write(
+					f"Unable to load {json_filename}"
+					+ " .  Please check that it contains valid json.\n"
+				)
+
 				sys.stderr.flush()
 				raise
 	else:
 		json_to_return = default_content
 		write_object(json_filename, json.dumps(json_to_return))
-		sys.stderr.write("No configuration file " + json_filename + ' .  Using empty configuration.\n')
+		sys.stderr.write(
+			f"No configuration file {json_filename}"
+			+ ' .  Using empty configuration.\n'
+		)
+
 		sys.stderr.flush()
 
 	return json_to_return
@@ -69,42 +77,37 @@ def LoadMacData(MacFile):
 	"""Load Ethernet Mac address prefixes from standard locations (from ettercap, nmap, wireshark, and/or arp-scan)."""
 	global EtherManuf
 
-	More = ''
-	if len(EtherManuf) > 0:
-		More = ' more'
-
-	LoadCount = 0
-
+	More = ' more' if len(EtherManuf) > 0 else ''
 	if os.path.isfile(MacFile):
+		LoadCount = 0
+
 		try:
-			MacHandle = open(MacFile, 'r')
+			with open(MacFile, 'r') as MacHandle:
+				for line in MacHandle:
+					if (len(line) >= 8) and (line[2] == ':') and (line[5] == ':'):
+						#uppercase incoming strings just in case one of the files uses lowercase
+						MacHeader = line[:8].upper()
+						Manuf = line[8:].strip()
+						if MacHeader not in EtherManuf:
+							EtherManuf[MacHeader] = Manuf
+							LoadCount += 1
+					elif (len(line) >= 7) and (re.search('^[0-9A-F]{6}[ \t]', line) is not None):
+						MacHeader = str.upper(line[:2] + ':' + line[2:4] + ':' + line[4:6])
+						Manuf = line[7:].strip()
+						if MacHeader not in EtherManuf:
+							EtherManuf[MacHeader] = Manuf
+							LoadCount += 1
 
-			for line in MacHandle:
-				if (len(line) >= 8) and (line[2] == ':') and (line[5] == ':'):
-					#uppercase incoming strings just in case one of the files uses lowercase
-					MacHeader = line[:8].upper()
-					Manuf = line[8:].strip()
-					if not MacHeader in EtherManuf:
-						EtherManuf[MacHeader] = Manuf
-						LoadCount += 1
-				elif (len(line) >= 7) and (re.search('^[0-9A-F]{6}[ \t]', line) is not None):
-					MacHeader = str.upper(line[0:2] + ':' + line[2:4] + ':' + line[4:6])
-					Manuf = line[7:].strip()
-					if MacHeader not in EtherManuf:
-						EtherManuf[MacHeader] = Manuf
-						LoadCount += 1
-
-			MacHandle.close()
 			if '00:00:00' in EtherManuf:
 				del EtherManuf['00:00:00']		#Not really Xerox
 				LoadCount -= 1
 			Debug(str(LoadCount) + More + " mac prefixes loaded from " + str(MacFile))
 			return True
 		except:
-			Debug("Unable to load " + str(MacFile))
+			Debug(f"Unable to load {str(MacFile)}")
 			return False
 	else:
-		Debug("Unable to load " + str(MacFile))
+		Debug(f"Unable to load {str(MacFile)}")
 		return False
 
 
@@ -143,7 +146,7 @@ def load_file_into_originator_stats(incoming_log):
 			line = raw_line.strip()
 			if line.startswith('#fields'):
 				all_names = line.split('\t')[1:]		#[1:] drops the "#fields" label at the far left.
-				for x in list(range(0, len(all_names))):	#Load in the file's header so we know which column holds which field.
+				for x in list(range(len(all_names))):	#Load in the file's header so we know which column holds which field.
 					field_pos[all_names[x]] = x
 					field_name[x] = all_names[x]
 				#Sample field_name loaded:
@@ -151,7 +154,7 @@ def load_file_into_originator_stats(incoming_log):
 				#Sample field_pos loaded
 				#{'duration': 8, 'id.resp_h': 4, 'orig_bytes': 9, 'orig_pkts': 16, 'local_orig': 12, 'tunnel_parents': 20, 'history': 15, 'service': 7, 'proto': 6, 'id.orig_p': 3, 'resp_ip_bytes': 19, 'missed_bytes': 14, 'resp_bytes': 10, 'conn_state': 11, 'id.resp_p': 5, 'orig_ip_bytes': 17, 'id.orig_h': 2, 'ts': 0, 'local_resp': 13, 'uid': 1, 'resp_pkts': 18}
 				if 'id.orig_h' not in field_pos or 'id.orig_p' not in field_pos or 'id.resp_p' not in field_pos or 'proto' not in field_pos or 'service' not in field_pos or 'orig_bytes' not in field_pos or 'resp_bytes' not in field_pos:	#We require at least these fields, exit entirely if not present
-					Debug(str(incoming_log) + " is missing crucial field.")
+					Debug(f"{str(incoming_log)} is missing crucial field.")
 					load_completed = False
 					break
 			elif not line.startswith('#'):
@@ -256,7 +259,7 @@ def normalize_bytes(byte_limit):
 	elif isinstance(byte_limit, (int, float)):
 		retval = byte_limit
 	else:
-		fail("Unrecognized value: " + str(byte_limit))
+		fail(f"Unrecognized value: {str(byte_limit)}")
 
 	return retval
 
@@ -282,7 +285,7 @@ def create_ports_for_ip(user_profiles_for_ip, user_ports_for_profile):
 		profile_list = one_pair["profiles"]
 		for one_profile in profile_list:
 			if one_profile not in user_ports_for_profile:
-				fail("No profile named " + str(one_profile) + " in ports_for_profile")
+				fail(f"No profile named {str(one_profile)} in ports_for_profile")
 
 		for one_ip in system_list:
 			if '/' in one_ip:
@@ -333,18 +336,12 @@ def ports_for_identifier(one_id):
 		old_prefix_len = None
 		ip_obj = ipaddress.ip_address(one_id)					#Make an ip address object to check against supplied networks
 		for one_net in ports_for_identifier.networks_for_ip:
-			if ip_obj in one_net:						#If we match any of the supplied IP networks, use the list for it.
-				if ip_profile:						#If we match more than one...
-					if one_net.prefixlen > old_prefix_len:		#And this new one is a smaller subnet (greater /N)...
-						ip_profile = ports_for_identifier.networks_for_ip[one_net]	#Use it.
-						ports_for_identifier.pfi_cache[one_id] = ip_profile
-						old_prefix_len = one_net.prefixlen
-				else:
-					#We have _not_ already matched a previous network, so just use this one.
-					ip_profile = ports_for_identifier.networks_for_ip[one_net]
-					ports_for_identifier.pfi_cache[one_id] = ip_profile
-					old_prefix_len = one_net.prefixlen
-
+			if ip_obj in one_net and (
+				ip_profile and one_net.prefixlen > old_prefix_len or not ip_profile
+			):
+				ip_profile = ports_for_identifier.networks_for_ip[one_net]	#Use it.
+				ports_for_identifier.pfi_cache[one_id] = ip_profile
+				old_prefix_len = one_net.prefixlen
 	return ip_profile
 
 
@@ -353,19 +350,17 @@ def manuf_label(mac_addr, ManufTable):
 	"""Returns the correct Manufacturer name for a given mac address."""
 
 	if mac_addr[:8] == '-':
-		ret_manuf_label = ""
-	elif mac_addr[:14].startswith(('00:00:5E:00:01')):			#https://www.iana.org/assignments/ethernet-numbers/ethernet-numbers.xhtml#ethernet-numbers-1
-		ret_manuf_label = "VRRP Router"
+		return ""
+	elif mac_addr[:14].startswith(('00:00:5E:00:01')):	#https://www.iana.org/assignments/ethernet-numbers/ethernet-numbers.xhtml#ethernet-numbers-1
+		return "VRRP Router"
 	elif mac_addr[:14].startswith(('00:00:5E:00:02')):
-		ret_manuf_label = "IPv6 VRRP Router"
+		return "IPv6 VRRP Router"
 	elif mac_addr[:8].startswith(('01:00:5E', '33:33:', 'FF:FF:FF')):
-		ret_manuf_label = "Ethernet broadcast/multicast"
+		return "Ethernet broadcast/multicast"
 	elif mac_addr[:8] in ManufTable:
-		ret_manuf_label = ManufTable[mac_addr[:8]]
+		return ManufTable[mac_addr[:8]]
 	else:
-		ret_manuf_label = 'Unrecognized mac prefix'
-
-	return ret_manuf_label
+		return 'Unrecognized mac prefix'
 
 
 def output_results(output_lists, ips_of_mac_dict, user_args, EtherManufDict):
@@ -384,10 +379,15 @@ def output_results(output_lists, ips_of_mac_dict, user_args, EtherManufDict):
 				if user_args['web']:
 					print('<tr><th colspan=4 bgcolor="#00AAAA" align=left>' + str(value_list[0]) + "</th></tr>")
 				else:
-					print("======== " + value_list[0])
+					print(f"======== {value_list[0]}")
 				current_header = value_list[0]
 			if user_args['web']:
-				print("<tr><td>" + str(value_list[1]) + "</td><td align=right>" + str(value_list[2]) + "</td><td align=right>" + str("{:,}".format(value_list[3])) + "</td></tr>")
+				print(
+					f"<tr><td>{str(value_list[1])}</td><td align=right>{str(value_list[2])}</td><td align=right>"
+					+ "{:,}".format(value_list[3])
+					+ "</td></tr>"
+				)
+
 			else:
 				print('{1:<40s} {2:>20s} {3:>18,}'.format(*value_list))
 		if user_args['web']:
@@ -408,10 +408,13 @@ def output_results(output_lists, ips_of_mac_dict, user_args, EtherManufDict):
 			if len(ips_of_mac_dict[one_mac]) < 20:
 				ip_list = ', '.join(sorted(ips_of_mac_dict[one_mac]))
 			else:
-				ip_list = str(len(ips_of_mac_dict[one_mac])) + " ips"
+				ip_list = f"{len(ips_of_mac_dict[one_mac])} ips"
 
 			if user_args['web']:
-				print("<tr><td>" + str(one_mac) + "</td><td>" + str(my_manuf) + "</td><td>" + str(ip_list) + "</td></tr>")
+				print(
+					f"<tr><td>{str(one_mac)}</td><td>{str(my_manuf)}</td><td>{str(ip_list)}</td></tr>"
+				)
+
 			else:
 				print('{0:<18s} {1:<35s} {2:<s}'.format(str(one_mac), str(my_manuf), str(ip_list)))
 
@@ -442,12 +445,21 @@ pfp_filename = 'ports_for_profile.json'
 
 #======== Code ========
 if __name__ == "__main__":
-
 #==== Configuration ====
 	import argparse
 
-	parser = argparse.ArgumentParser(description='devprof version ' + str(devprof_version))
-	parser.add_argument('-c', '--config', help='Directory that holds configuration files (Default: ' + str(default_config_dir) + ')', default=default_config_dir, required=False)
+	parser = argparse.ArgumentParser(
+		description=f'devprof version {devprof_version}'
+	)
+
+	parser.add_argument(
+		'-c',
+		'--config',
+		help=f'Directory that holds configuration files (Default: {str(default_config_dir)})',
+		default=default_config_dir,
+		required=False,
+	)
+
 	parser.add_argument('-t', '--time', help='Time (in hours) covered by logs (default: number of logs loaded).', required=False, type=float)
 	parser.add_argument('-d', '--directory', help='Directory that holds Bro/Zeek log files.', required=True)
 	parser.add_argument('-w', '--web', help='Show in web (HTML) format (default: text)', required=False, default=False, action='store_true')
@@ -459,27 +471,36 @@ if __name__ == "__main__":
 
 	config_dir = cl_args['config']
 	if not os.path.isdir(config_dir):
-		fail("No configuration directory " + config_dir + " : please create it and rerun this program")
+		fail(
+			f"No configuration directory {config_dir} : please create it and rerun this program"
+		)
 
-	profiles_for_ip = load_json(config_dir + '/' + pfi_filename, {"system_profile_pairs": [{"systems": ["0.0.0.0/0", "::/0"], "profiles": []}]})
-	ports_for_profile = load_json(config_dir + '/' + pfp_filename, {})
 
+	profiles_for_ip = load_json(
+		f'{config_dir}/{pfi_filename}',
+		{
+			"system_profile_pairs": [
+				{"systems": ["0.0.0.0/0", "::/0"], "profiles": []}
+			]
+		},
+	)
+
+	ports_for_profile = load_json(f'{config_dir}/{pfp_filename}', {})
 #==== Support data ====
 	for oneMacFile in ('/usr/share/ettercap/etter.finger.mac', '/opt/local/share/ettercap/etter.finger.mac', '/usr/share/nmap/nmap-mac-prefixes', '/opt/local/share/nmap/nmap-mac-prefixes', '/usr/share/wireshark/manuf', '/opt/local/share/wireshark/manuf', '/usr/share/ethereal/manuf', '/usr/share/arp-scan/ieee-oui.txt', '/opt/local/share/arp-scan/ieee-oui.txt'):
 		if os.path.isfile(oneMacFile):
 			LoadMacData(oneMacFile)
-	if len(EtherManuf) == 0:
+	if not EtherManuf:
 		Debug("None of the default mac address listings found.  Please install ettercap, nmap, wireshark, and/or arp-scan.")
 	else:
-		Debug(str(len(EtherManuf)) + " mac prefixes loaded.")
-
+		Debug(f"{len(EtherManuf)} mac prefixes loaded.")
 #==== Load Bro/Zeek logs ====
 	bro_log_dir = cl_args['directory']
 	if bro_log_dir[-1:] != '/':
-		bro_log_dir = bro_log_dir + '/'				#Make sure it ends with a slash.
+		bro_log_dir = f'{bro_log_dir}/'
 
 	for one_log in tree_file_listing(bro_log_dir):
-		if one_log.startswith(bro_log_dir + 'conn') and os.path.isfile(one_log):
+		if one_log.startswith(f'{bro_log_dir}conn') and os.path.isfile(one_log):
 			Debug(one_log)
 			load_file_into_originator_stats(one_log)
 
@@ -493,14 +514,13 @@ if __name__ == "__main__":
 			multiplier = float(24) / cl_args['hours']	#Use user-supplied value if there is one,
 	else:
 		multiplier = float(24) / files_successfully_loaded	#...otherwise go by the number of logs successfully loaded.
-
 #==== Compare loaded traffic stats to the user-defined limits ====
 	out_lists = []
 
-	for one_src_ip in originator_stats.keys():
+	for one_src_ip, value in originator_stats.items():
 		my_ip_profile = ports_for_identifier(one_src_ip)
 
-		for one_proto in originator_stats[one_src_ip]:
+		for one_proto in value:
 			this_proto_category = 'unknown'
 			for one_prof in my_ip_profile.keys():
 				if one_proto == one_prof:
@@ -515,8 +535,5 @@ if __name__ == "__main__":
 				out_lists.append([this_proto_category, one_src_ip, one_proto, originator_stats[one_src_ip][one_proto]])
 			#else:
 			#	print(this_proto_category)
-
-
-
 #==== Display results ====
 	output_results(out_lists, ips_of_mac, cl_args, EtherManuf)
